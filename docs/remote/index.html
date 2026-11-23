@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f29a1f">
+<meta name="description" content="Web-Bluetooth-Fernsteuerung für den Hexapod (LinkIt 7697) – Ersatz für die LinkIt Remote (LRemote) App.">
+<title>Hexapod Remote</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #1d1d1d;
+    --panel: #2b2b2b;
+    --bar: #f29a1f;
+    --text: #fff;
+    --muted: #a8a8a8;
+    --c1: #f29a1f; /* orange */
+    --c2: #f7cc12; /* yellow */
+    --c3: #129fe0; /* blue   */
+    --c4: #6fbe2a; /* green  */
+    --c5: #e9418e; /* pink   */
+    --c6: #3b3b38; /* grey   */
+    --gap: 6px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+  header { display: flex; align-items: center; gap: 8px; background: var(--bar); padding: 10px 12px; flex: none; }
+  header h1 { font-size: 20px; font-weight: 600; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header button { background: rgba(0,0,0,.18); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px;
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  header button:active { background: rgba(0,0,0,.35); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #7a1a1a; flex: none; box-shadow: 0 0 0 2px rgba(0,0,0,.2); }
+  .dot.on { background: #3ee06a; }
+  .dot.busy { background: #ffe14d; animation: blink .8s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  main { flex: 1; min-height: 0; padding: var(--gap); display: flex; }
+
+  /* start screen */
+  #start { margin: auto; max-width: 440px; text-align: center; padding: 16px; }
+  #start p { color: var(--muted); line-height: 1.45; }
+  #start .big { display: block; width: 100%; padding: 18px; font-size: 18px; font-weight: 700; border: 0; border-radius: 12px;
+    background: var(--bar); color: #fff; margin: 18px 0 10px; cursor: pointer; }
+  #start .small { background: transparent; color: var(--muted); border: 1px solid #444; border-radius: 10px; padding: 10px 14px;
+    font: inherit; cursor: pointer; }
+  #warn { background: #4a2323; color: #ffd2d2; padding: 12px; border-radius: 10px; text-align: left; font-size: 14px; line-height: 1.4; }
+  #warn:empty { display: none; }
+  #msg { min-height: 1.4em; color: #ffcf7a; }
+
+  /* remote grid */
+  #grid { flex: 1; display: none; gap: var(--gap); touch-action: none; user-select: none; -webkit-user-select: none; }
+  #grid.show { display: grid; }
+  .ctl { border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-weight: 700; font-size: clamp(11px, 3.4vw, 16px); text-transform: uppercase; padding: 4px; overflow: hidden;
+    min-width: 0; min-height: 0; word-break: break-word; }
+  .btn { cursor: pointer; transition: filter .05s, transform .05s; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+  .btn.down { filter: brightness(.7); transform: scale(.97); }
+  .btn.circle { border-radius: 50%; aspect-ratio: 1; margin: auto; height: 100%; max-width: 100%; }
+  .label { background: transparent !important; color: var(--muted); text-transform: none; font-weight: 500; }
+  .label.boxed { background: var(--panel) !important; color: #fff; font-size: clamp(13px, 3.8vw, 18px); }
+  .c1 { background: var(--c1); } .c2 { background: var(--c2); } .c3 { background: var(--c3); }
+  .c4 { background: var(--c4); } .c5 { background: var(--c5); } .c6, .c0 { background: var(--c6); }
+  .label.c5.boxed { background: #4b2a3b !important; color: #ffc4e0; }
+
+  .slider { background: var(--panel) !important; flex-direction: column; align-items: stretch; justify-content: center;
+    padding: 8px 16px; text-transform: none; gap: 4px; }
+  .slider .row { display: flex; justify-content: space-between; font-weight: 600; }
+  .slider input { width: 100%; height: 36px; accent-color: var(--accent, var(--c3)); touch-action: pan-x; }
+
+  .switch { background: var(--panel) !important; flex-direction: column; gap: 6px; cursor: pointer; }
+  .switch .knob { width: 52px; height: 28px; border-radius: 14px; background: #555; position: relative; transition: background .15s; }
+  .switch .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; transition: left .15s; }
+  .switch.on .knob { background: var(--accent, var(--c4)); }
+  .switch.on .knob::after { left: 27px; }
+
+  .joy { background: var(--panel) !important; position: relative; touch-action: none; }
+  .joy .pad { position: relative; width: min(90%, 90cqh); aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.06);
+    border: 2px solid rgba(255,255,255,.12); }
+  .joy .stick { position: absolute; width: 38%; aspect-ratio: 1; border-radius: 50%; left: 31%; top: 31%;
+    background: var(--accent, var(--c3)); box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+  .joy { container-type: size; }
+
+  footer { flex: none; color: #777; font-size: 12px; text-align: center; padding: 4px 8px 6px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot" title="Verbindungsstatus"></span>
+  <h1 id="title">Hexapod Remote</h1>
+  <button id="btnConn" hidden>Trennen</button>
+</header>
+
+<main>
+  <section id="start">
+    <img src="icon.svg" width="96" height="96" alt="">
+    <h2>Hexapod Remote</h2>
+    <p>Bluetooth-Fernsteuerung für den Hexapod mit LinkIt&nbsp;7697.<br>
+       Ersatz für die „LinkIt Remote“-App – keine Firmware-Änderung nötig.</p>
+    <div id="warn"></div>
+    <button class="big" id="btnScan">Verbinden</button>
+    <div id="msg"></div>
+    <p style="margin-top:22px"><button class="small" id="btnDemo">Demo-Ansicht ohne Roboter</button></p>
+  </section>
+  <div id="grid"></div>
+</main>
+<footer id="foot">Web Bluetooth · LRemote-Protokoll v4</footer>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// LRemote BLE protocol (MediaTek LinkIt 7697 "LRemote" library, protocol v4)
+// ---------------------------------------------------------------------------
+const UUID = {
+  service:     '3f60ab39-1710-4456-930c-7e9c9539917e',
+  count:       '3f60ab39-1711-4456-930c-7e9c9539917e', // int32
+  types:       '3f60ab39-1712-4456-930c-7e9c9539917e', // uint8[n]
+  rows:        '3f60ab39-1713-4456-930c-7e9c9539917e', // int32
+  cols:        '3f60ab39-1714-4456-930c-7e9c9539917e', // int32
+  colors:      '3f60ab39-1715-4456-930c-7e9c9539917e', // uint8[n]
+  frames:      '3f60ab39-1716-4456-930c-7e9c9539917e', // uint8[n*4] (x, y, w, h)
+  names:       '3f60ab39-1717-4456-930c-7e9c9539917e', // "\n"-separated
+  event:       'b5d2ff7b-6eff-4fb5-9b72-6b9cff5181e7', // RCEventInfo (6 bytes)
+  uiUpdate:    'e4b1ddfe-eb37-4c78-aba8-c5fa944775cb', // RCUIUpdateInfo (notify)
+  config:      '5d7a63ff-4155-4c7c-a348-1c0a323a6383', // RCConfigData[n] (4x int16)
+  orientation: '203fbbcd-9967-4eba-b0ff-0f72e5a634eb', // int32
+  version:     'ae73266e-65d4-4023-8868-88b070d5d576', // int32
+};
+const TYPE = { LABEL: 1, PUSH: 2, CIRCLE: 3, SWITCH: 4, SLIDER: 5, ANALOG: 6 };
+const EVT  = { DOWN: 1, UP: 2, VALUE: 3 };
+
+const $ = (id) => document.getElementById(id);
+const grid = $('grid');
+
+let device = null, chars = {}, layout = null, demo = false;
+let seq = 0, wakeLock = null, userDisconnect = false;
+
+// ---------- serialized GATT write queue (Web Bluetooth allows one op at a time)
+const queue = [];
+let writing = false;
+function sendEvent(index, event, data) {
+  if (demo) { console.log('event', { index, event, data }); return; }
+  if (!chars.event) return;
+  // Coalesce consecutive value changes of the same control (slider / joystick)
+  const last = queue[queue.length - 1];
+  if (event === EVT.VALUE && last && last.index === index && last.event === EVT.VALUE) { last.data = data; return; }
+  queue.push({ index, event, data });
+  pump();
+}
+async function pump() {
+  if (writing) return;
+  writing = true;
+  try {
+    while (queue.length) {
+      const e = queue.shift();
+      seq = (seq + 1) & 0xff;
+      const d = e.data & 0xffff;
+      const buf = new Uint8Array([seq, e.index, e.event, 0, d & 0xff, d >> 8]);
+      try {
+        if (chars.event.writeValueWithResponse) await chars.event.writeValueWithResponse(buf);
+        else await chars.event.writeValue(buf);
+      } catch (err) {
+        console.warn('write failed', err);
+        if (!device || !device.gatt.connected) { queue.length = 0; break; }
+        await new Promise(r => setTimeout(r, 30));
+        queue.unshift(e); // retry once more later
+      }
+    }
+  } finally { writing = false; }
+}
+
+// ---------- helpers
+const dec = new TextDecoder('utf-8');
+function readInt(dv) {
+  if (dv.byteLength >= 4) return dv.getInt32(0, true);
+  if (dv.byteLength >= 2) return dv.getInt16(0, true);
+  return dv.byteLength ? dv.getUint8(0) : 0;
+}
+function bytes(dv) { return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength); }
+function setStatus(state, text) {
+  $('dot').className = 'dot' + (state === 'on' ? ' on' : state === 'busy' ? ' busy' : '');
+  if (text !== undefined) $('msg').textContent = text;
+}
+
+// ---------- connect
+async function scan() {
+  if (!navigator.bluetooth) return;
+  try {
+    setStatus('busy', 'Suche Hexapod …');
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [UUID.service] }, { namePrefix: 'Hexapod' }],
+      optionalServices: [UUID.service],
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    await connect();
+  } catch (err) {
+    setStatus('off', err.name === 'NotFoundError' ? 'Kein Gerät ausgewählt.' : 'Fehler: ' + err.message);
+  }
+}
+
+async function connect() {
+  userDisconnect = false;
+  setStatus('busy', 'Verbinde mit ' + (device.name || 'Hexapod') + ' …');
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(UUID.service);
+  chars = {};
+  for (const [k, u] of Object.entries(UUID)) {
+    if (k === 'service') continue;
+    try { chars[k] = await svc.getCharacteristic(u); } catch (e) { /* optional */ }
+  }
+  const rd = async (k) => chars[k] ? await chars[k].readValue() : new DataView(new ArrayBuffer(0));
+
+  const version = readInt(await rd('version'));
+  const count   = readInt(await rd('count'));
+  const cols    = readInt(await rd('cols')) || 1;
+  const rows    = readInt(await rd('rows')) || 1;
+  const types   = bytes(await rd('types'));
+  const colors  = bytes(await rd('colors'));
+  const frames  = bytes(await rd('frames'));
+  const cfg     = await rd('config');
+  const names   = dec.decode(await rd('names')).split('\n');
+
+  const controls = [];
+  for (let i = 0; i < count; i++) {
+    const c = { index: i, type: types[i], color: colors[i] || 6,
+      x: frames[i*4], y: frames[i*4+1], w: frames[i*4+2] || 1, h: frames[i*4+3] || 1,
+      text: (names[i] || '').replace(/\0/g, '') };
+    if (cfg.byteLength >= (i + 1) * 8) {
+      c.min = cfg.getInt16(i*8, true); c.max = cfg.getInt16(i*8+2, true); c.init = cfg.getInt16(i*8+4, true);
+    }
+    controls.push(c);
+  }
+  layout = { name: device.name || 'Hexapod', version, cols, rows, controls };
+
+  if (chars.uiUpdate) {
+    try {
+      chars.uiUpdate.addEventListener('characteristicvaluechanged', onUiUpdate);
+      await chars.uiUpdate.startNotifications();
+    } catch (e) { console.warn('notifications not available', e); }
+  }
+
+  render(layout);
+  setStatus('on', '');
+  $('foot').textContent = `${layout.name} · ${count} Elemente · Protokoll v${version}`;
+  $('btnConn').hidden = false;
+  $('btnConn').textContent = 'Trennen';
+  keepAwake();
+}
+
+function onUiUpdate(ev) {
+  const dv = ev.target.value;
+  if (dv.byteLength < 2) return;
+  const idx = dv.getUint8(0), size = dv.getUint8(1);
+  const text = dec.decode(new Uint8Array(dv.buffer, dv.byteOffset + 2, Math.min(size, dv.byteLength - 2))).replace(/\0.*$/s, '');
+  const el = grid.querySelector(`[data-index="${idx}"]`);
+  if (el && el.classList.contains('label')) el.textContent = text;
+}
+
+async function onDisconnected() {
+  queue.length = 0;
+  chars = {};
+  releaseAll(false);
+  setStatus('off');
+  if (userDisconnect) return showStart('Getrennt.');
+  // try to reconnect automatically
+  for (let i = 1; i <= 3; i++) {
+    setStatus('busy', `Verbindung verloren – neuer Versuch ${i}/3 …`);
+    grid.style.opacity = .4;
+    try { await connect(); grid.style.opacity = ''; return; } catch (e) { await new Promise(r => setTimeout(r, 1000)); }
+  }
+  grid.style.opacity = '';
+  showStart('Verbindung verloren.');
+}
+
+function disconnect() {
+  userDisconnect = true;
+  releaseAll(true);
+  setTimeout(() => { if (device && device.gatt.connected) device.gatt.disconnect(); else showStart(''); }, 150);
+}
+
+function showStart(text) {
+  grid.classList.remove('show');
+  grid.innerHTML = '';
+  $('start').hidden = false;
+  $('btnConn').hidden = true;
+  $('title').textContent = 'Hexapod Remote';
+  $('foot').textContent = 'Web Bluetooth · LRemote-Protokoll v4';
+  setStatus('off', text);
+  demo = false;
+  $('btnScan').textContent = (device && !userDisconnect) ? 'Erneut verbinden' : 'Verbinden';
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+
+// ---------- rendering
+const pressed = new Map(); // pointerId -> element
+
+function render(l) {
+  $('start').hidden = true;
+  $('title').textContent = l.name;
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `repeat(${l.cols}, minmax(0, 1fr))`;
+  grid.style.gridTemplateRows = `repeat(${l.rows}, minmax(0, 1fr))`;
+  grid.classList.add('show');
+
+  for (const c of l.controls) {
+    let h = c.h;
+    if (c.type === TYPE.SLIDER) h = 1;                  // like the original app: sliders are one row high
+    const w = Math.max(1, Math.min(c.w, l.cols - c.x));
+    h = Math.max(1, Math.min(h, l.rows - c.y));
+
+    const el = document.createElement('div');
+    el.dataset.index = c.index;
+    el.className = 'ctl c' + c.color;
+    el.style.gridColumn = `${c.x + 1} / span ${w}`;
+    el.style.gridRow = `${c.y + 1} / span ${h}`;
+    el.style.setProperty('--accent', `var(--c${c.color})`);
+
+    switch (c.type) {
+      case TYPE.LABEL:
+        el.classList.add('label');
+        if (c.color !== 6) el.classList.add('boxed');
+        el.textContent = c.text;
+        break;
+      case TYPE.PUSH: case TYPE.CIRCLE:
+        el.classList.add('btn');
+        if (c.type === TYPE.CIRCLE) el.classList.add('circle');
+        el.textContent = c.text;
+        el.addEventListener('pointerdown', (e) => press(e, el, c));
+        break;
+      case TYPE.SWITCH: buildSwitch(el, c); break;
+      case TYPE.SLIDER: buildSlider(el, c); break;
+      case TYPE.ANALOG: buildJoystick(el, c); break;
+      default: el.textContent = c.text; el.classList.add('label');
+    }
+    grid.appendChild(el);
+  }
+}
+
+function press(e, el, c) {
+  e.preventDefault();
+  el.setPointerCapture(e.pointerId);
+  if (el.classList.contains('down')) return;
+  el.classList.add('down');
+  pressed.set(e.pointerId, { el, c });
+  if (navigator.vibrate) navigator.vibrate(12);
+  sendEvent(c.index, EVT.DOWN, 1);
+}
+function release(pointerId) {
+  const p = pressed.get(pointerId);
+  if (!p) return;
+  pressed.delete(pointerId);
+  p.el.classList.remove('down');
+  sendEvent(p.c.index, EVT.UP, 0);
+}
+function releaseAll(send) {
+  for (const [id, p] of pressed) {
+    p.el.classList.remove('down');
+    if (send) sendEvent(p.c.index, EVT.UP, 0);
+  }
+  pressed.clear();
+}
+for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'])
+  grid.addEventListener(t, (e) => release(e.pointerId), true);
+// Safety: never leave a button "held" when the page loses focus
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(true); });
+window.addEventListener('blur', () => releaseAll(true));
+grid.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function buildSlider(el, c) {
+  el.classList.add('slider');
+  const min = c.min ?? 0, max = c.max ?? 100, init = c.init ?? min;
+  el.innerHTML = '<div class="row"><span></span><span class="val"></span></div><input type="range">';
+  el.querySelector('span').textContent = c.text;
+  const val = el.querySelector('.val'), inp = el.querySelector('input');
+  Object.assign(inp, { min, max, step: 1, value: init });
+  val.textContent = init;
+  let last = init;
+  inp.addEventListener('input', () => {
+    const v = +inp.value;
+    val.textContent = v;
+    if (v !== last) { last = v; if (navigator.vibrate) navigator.vibrate(8); sendEvent(c.index, EVT.VALUE, v); }
+  });
+}
+
+function buildSwitch(el, c) {
+  el.classList.add('switch');
+  el.innerHTML = '<span></span><div class="knob"></div>';
+  el.querySelector('span').textContent = c.text;
+  let on = false;
+  el.addEventListener('click', () => {
+    on = !on;
+    el.classList.toggle('on', on);
+    sendEvent(c.index, EVT.VALUE, on ? 1 : 0);
+  });
+}
+
+function buildJoystick(el, c) {
+  el.classList.add('joy');
+  el.innerHTML = '<div class="pad"><div class="stick"></div></div>';
+  const pad = el.querySelector('.pad'), stick = el.querySelector('.stick');
+  let active = null, lastSent = 0, timer = null, cur = [0, 0];
+  const send = () => {
+    const [x, y] = cur;
+    sendEvent(c.index, EVT.VALUE, ((x & 0xff) << 8) | (y & 0xff));
+    lastSent = performance.now();
+  };
+  const move = (e) => {
+    const r = pad.getBoundingClientRect();
+    let dx = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+    let dy = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    stick.style.transform = `translate(${dx * r.width * .31}px, ${dy * r.height * .31}px)`;
+    cur = [Math.round(dx * 100), Math.round(-dy * 100)];
+    if (performance.now() - lastSent > 50) send();
+    else if (!timer) timer = setTimeout(() => { timer = null; send(); }, 50);
+  };
+  pad.addEventListener('pointerdown', (e) => { active = e.pointerId; pad.setPointerCapture(e.pointerId); move(e); });
+  pad.addEventListener('pointermove', (e) => { if (e.pointerId === active) move(e); });
+  const end = (e) => {
+    if (e.pointerId !== active) return;
+    active = null; clearTimeout(timer); timer = null;
+    stick.style.transform = ''; cur = [0, 0]; send();
+  };
+  pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+}
+
+// ---------- demo layout (mirrors software/hexapod7697/src/normal_mode.cpp)
+const DEMO = { name: 'Hexapod (Demo)', version: 4, cols: 3, rows: 5, controls: [
+  { type: 5, color: 1, x: 0, y: 2, w: 3, h: 3, text: 'Slow --- Normal --- Fast', min: -1, max: 1, init: 0 },
+  { type: 2, color: 3, x: 1, y: 3, w: 1, h: 1, text: 'Forward' },
+  { type: 2, color: 3, x: 1, y: 4, w: 1, h: 1, text: 'Backward' },
+  { type: 2, color: 4, x: 0, y: 3, w: 1, h: 1, text: 'TurnLeft' },
+  { type: 2, color: 4, x: 2, y: 3, w: 1, h: 1, text: 'TurnRight' },
+  { type: 2, color: 3, x: 0, y: 4, w: 1, h: 1, text: 'ShiftLeft' },
+  { type: 2, color: 3, x: 2, y: 4, w: 1, h: 1, text: 'ShiftRight' },
+  { type: 2, color: 1, x: 2, y: 1, w: 1, h: 1, text: 'Climb' },
+  { type: 2, color: 2, x: 0, y: 0, w: 1, h: 1, text: 'RotateX' },
+  { type: 2, color: 2, x: 1, y: 0, w: 1, h: 1, text: 'RotateY' },
+  { type: 2, color: 2, x: 2, y: 0, w: 1, h: 1, text: 'RotateZ' },
+  { type: 2, color: 2, x: 0, y: 1, w: 1, h: 1, text: 'Twist' },
+].map((c, i) => ({ ...c, index: i })) };
+
+// ---------- wire up
+$('btnScan').addEventListener('click', () => {
+  // After a lost connection, reconnect to the same robot without the device picker
+  if (device && !device.gatt.connected && !userDisconnect)
+    connect().catch(err => setStatus('off', 'Fehler: ' + err.message));
+  else scan();
+});
+$('btnDemo').addEventListener('click', () => {
+  demo = true; render(DEMO);
+  $('btnConn').hidden = false; $('btnConn').textContent = 'Beenden';
+  $('foot').textContent = 'Demo – es werden keine Befehle gesendet';
+});
+$('btnConn').addEventListener('click', () => demo ? showStart('') : disconnect());
+
+(async () => {
+  const w = [];
+  if (!window.isSecureContext) w.push('Diese Seite muss über HTTPS (oder localhost) geöffnet werden, sonst ist Bluetooth gesperrt.');
+  if (!navigator.bluetooth) {
+    w.push('Dieser Browser unterstützt kein Web Bluetooth. ' +
+      'Android: Chrome, Edge, Opera oder Samsung Internet verwenden. ' +
+      'iPhone/iPad: die kostenlose App „Bluefy“ verwenden (Safari kann kein Bluetooth). ' +
+      'Desktop: Chrome oder Edge.');
+  } else if (navigator.bluetooth.getAvailability && !(await navigator.bluetooth.getAvailability())) {
+    w.push('Bluetooth scheint ausgeschaltet oder nicht verfügbar zu sein.');
+  }
+  $('warn').textContent = w.join(' ');
+  $('btnScan').disabled = !navigator.bluetooth;
+  if (!navigator.bluetooth) $('btnScan').style.opacity = .4;
+})();
+
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
