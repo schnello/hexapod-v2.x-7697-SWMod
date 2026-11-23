@@ -40,6 +40,7 @@ If you want to make one hexapod by yourself. You should at least knows how to:
 * Software
     * Use `Linkit 7697` (ie. upload and run any program)
     * Use `LRemote` to communicate 7697 and your mobile phone
+      (the LRemote app is no longer available – use the [Web Bluetooth remote](docs/remote/) instead)
 
 ## Table of Content
 

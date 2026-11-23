@@ -26,6 +26,9 @@ src/hexapod/hal | Hardware Abatraction Layer to running on Linkit 7697 |
 
 ![setting](files/setting_mode.png)
 
+> **The LRemote app is no longer available for current phones.** Use the browser based
+> replacement in [`docs/remote`](../docs/remote/) instead (Web Bluetooth, no firmware change needed).
+
 During Linkit 7697 boot up, quick press the user button. 
 
 LRemote App will display above UI.
